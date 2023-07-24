@@ -1,2 +1,4 @@
-# eme3058
+# eme3058 Mechanical Engineering Capstone Design
+SKKU/2023
+
 Design Surgical Robots using Haptic Feedback

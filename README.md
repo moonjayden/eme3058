@@ -1,5 +1,5 @@
 # eme3058
-SKKU/2023
+@SKKU/2023
 
 [1st Ranked] in Mechanical Engineering Senior Capstone Design
 

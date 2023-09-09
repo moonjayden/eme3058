@@ -8,13 +8,11 @@ Senior Capstone Design _ Team ZEST
 
 //*****************************************DEFINE NUMS*********************************************
 //pin 설정 
-#define SERVO_YAWING1_PIN 11
-#define SERVO_YAWING2_PIN 10
-#define SERVO_TILTING_PIN 9
-#define VIBRATION_PIN 6
-//안쓰는 것들
-#define SERVO_PINION_PIN 12
-#define SERVO_GRIPPING_PIN 13
+#define SERVO_YAWING1_PIN 13
+#define SERVO_YAWING2_PIN 12
+#define SERVO_TILTING_PIN 11
+#define SERVO_PINION_PIN 10
+#define SERVO_GRIPPING_PIN 9
 #define FLEX1_PIN A0  //up
 #define FLEX2_PIN A1  //down
 #define FLEX3_PIN A2  //gripper
@@ -50,15 +48,15 @@ Servo ser_grip;
 int sw; //Switch On/Off
 //-----------------------motor------------------------
 int yaw_tilt_IA = 90; //yawing과 tilting 모터의 Initial Angle(똑바로 서있는 상태)
-int yaw_tilt_IA_p = map(yaw_tilt_IA, 0, 180, 0, 255); //위와 대응하는 pwm 값
+int yaw_tilt_IA_p = map(yaw_tilt_IA, 0, 180, 0, 255); //위와 대응하는 pwm 값 --> 90 *255/180 = 127.5
 
 int yaw_tilt_MA = 60; //yawing과 tilting 모터의 Motion Angle(앞뒤로 움직이는 각도): 이 경우엔 120도의 회전각을 가짐
-int yaw_tilt_MA_p = map(yaw_tilt_MA, 0, 180, 0, 255); //위와 대응하는 pwm 값
+int yaw_tilt_MA_p = map(yaw_tilt_MA, 0, 180, 0, 255); //위와 대응하는 pwm 값 --> 60 * 255/180 = 85
 
 int pinion_IA = 10; //pinion gear 모터의 Initial Angle (공차 조금 주기)
 int pinion_FA = 170; //pinion gear 모터의 Final Angle (공차 조금 주기)
-int pinion_IA_p = map(pinion_IA, 0, 180, 0, 255); //위와 대응하는 pwm 값 10*255/180
-int pinion_FA_p = map(pinion_FA, 0, 180, 0, 255); //위와 대응하는 pwm 값 170*255/180=
+int pinion_IA_p = map(pinion_IA, 0, 180, 0, 255); //위와 대응하는 pwm 값 10*255/180 = 14.17
+int pinion_FA_p = map(pinion_FA, 0, 180, 0, 255); //위와 대응하는 pwm 값 170*255/180 = 240.83
 
 int grip_IA = 30;  //gripper 모터의 Initial Angle(그리퍼가 쫙 펴진 상태)
 int grip_IA_p = map(grip_IA, 0, 180, 0, 255); //위와 대응하는 pwm 값
@@ -71,7 +69,7 @@ int pinion_A = pinion_IA;
 int pinion_p = map(pinion_A, 0, 180, 0, 255);
 
 //-----------------------------flex sensor 관련 선언--------------------------------------
-int flex_up_max = 24; //flex sensor max 값 지정
+int flex_up_max = 240; //flex sensor max 값 지정
 int flex_down_max = 24; 
 int flex_grip_max = 40; 
 int flex_up_min = 9; //flex sensor min 값 지정
@@ -80,7 +78,8 @@ int flex_grip_min = 10;
 
 //-----------------------------gripper 관련 선언--------------------------------------
 int grip_stop;
-
+//-----------------------------압력 센서 관련 선언 ------------------------------------
+int grip_press1, grip_press2;
 //------------------------------ IMU Data 관련 선언 --------------------------------------------
 double accX, accY, accZ;
 double gyroX, gyroY, gyroZ;
@@ -106,20 +105,12 @@ int total_tilt = 0;
 float average_flex, average_yaw, average_tilt;
 int cnt = 0;
 
-//----vibration-----//
-int vibration;
-
-
 //********************************************USER FUNCTION DEFINE*************************************************
 int TO_BIN(int val){
   if(val>40) return 1;
   else  return 0;
 }
 float MOVING_AVERAGE (int target, int indicator){
-  /*if(Index==SAMPLING_NUM - 1) {
-    Index=0;
-    cnt++;
-  }*/
   if (indicator == 1){
   total_yaw = total_yaw-readings_yaw[Index];
   readings_yaw[Index] = target;
@@ -134,6 +125,12 @@ float MOVING_AVERAGE (int target, int indicator){
   readings_tilt[Index] = target;
   total_tilt = total_tilt + readings_tilt[Index];
   average_tilt = total_tilt / SAMPLING_NUM;
+  for(int j=0;j<10;j++) {
+    Serial.print("readings_tilt");Serial.print(j); Serial.print(" = ");Serial.println(readings_tilt[j]);
+  }
+  Serial.print("index = "); Serial.println(Index);
+  Serial.print("cnt = "); Serial.println(cnt);
+  Serial.print("Total = "); Serial.println(total_tilt);
   if(cnt>0) return average_tilt;
   else  return target;
   }
@@ -229,19 +226,16 @@ void IMU_filtering(double accX, double accY, double accZ, double tempRaw, double
    Serial.print(temperature); Serial.print("\t");
  #endif
    Serial.print("\r\n");*/
-
-  Serial.print("Swtich:\t"); Serial.println(sw);
 }
 
 
 //------------------------------------------Gripper Feedback Function------------------------------------------------------
-int PRESS_feedback (int PRESS_data){
+void PRESS_feedback (int PRESS_data){
     if(PRESS_data > PRESS_MAX){
-      
-        return 1;
+        grip_stop = 1;
     }
     else{
-        return 0;
+        grip_stop = 0;
     }
 }
 
@@ -258,10 +252,10 @@ void setup() {
     readings_flex[i]=0;
   } 
   for(int i=0; i<SAMPLING_NUM; i++){
-  readings_yaw[i]=0;
+    readings_yaw[i]=0;
   } 
   for(int i=0; i<SAMPLING_NUM; i++){
-  readings_tilt[i]=0;
+    readings_tilt[i]=0;
   } 
   //-----------------------------------------Motor-----------------------------------------------------------
   ser_yaw1.attach(SERVO_YAWING1_PIN);
@@ -270,22 +264,20 @@ void setup() {
   ser_pinion.attach(SERVO_PINION_PIN);
   ser_grip.attach(SERVO_GRIPPING_PIN);
 
-  pinMode(VIBRATION_PIN, OUTPUT);
-
   //모터 각도 initialize
- /* ser_yaw1.write(yaw_tilt_IA_p);
+  ser_yaw1.write(yaw_tilt_IA_p);
   ser_yaw2.write(yaw_tilt_IA_p);
   ser_tilt.write(yaw_tilt_IA_p);
   ser_pinion.write(pinion_IA_p);
-  ser_grip.write(grip_IA_p);*/
+  ser_grip.write(grip_IA_p);
 
-  delay(100); //motor initialize 후 delay
+  delay(1000); //motor initialize 후 delay
   //------------------------------------------Switch&Gripper-----------------------------------------------------------
-  //sw = 0; //switch 추가 예정
+
   grip_stop = 0;
 
 
-  Serial.begin(115200);
+  Serial.begin(57600);
   Wire.begin();
   TWBR = ((F_CPU / 400000L) - 16) / 2; // Set I2C frequency to 400kHz
 
@@ -332,6 +324,7 @@ void setup() {
 
 
 void loop() {
+    Serial.println("Success");
   //-------------------------------------------------------IMU Sensor--------------------------------------------------
     while (i2cRead(0x3B, i2cData, 14));
     accX = ((i2cData[0] << 8) | i2cData[1]);
@@ -350,19 +343,21 @@ void loop() {
      Serial.print("Y=");Serial.print(compAngleY); Serial.print("\t\n");
     delay(2);
 
-//-------------------------------------------------------data--------------------------------------------------
-    float yaw1_p_mv,yaw2_p_mv, tilt_p_mv;
+//-------------------------------------------------------gangho--------------------------------------------------
+    float yaw1_p_mv, yaw2_p_mv, tilt_p_mv;
+
   //모터 동작 values
-    int yaw_p, tilt_p, flex_down_bd, flex_up_bd, flex_grip_bd, gripper_p;
+    int yaw1_p, yaw2_p, tilt_p, flex_down_bd, flex_up_bd, flex_grip_bd, gripper_p;
   //시리얼로 전달받은 sensor data values
     int x_angle, y_angle, flex_pinion_up, flex_pinion_down, flex_gripper;
     int x_angle_bf, y_angle_bf, flex_pinion_up_bf, flex_pinion_down_bf, flex_gripper_bf; //buffer
     int x_angle_df, y_angle_df, flex_pinion_up_df, flex_pinion_down_df, flex_gripper_df; //difference = ()buff- ()=이전값-현재값
-  //압전 센서 values
-    int gripper_press;
-    sw = TO_BIN(analogRead(SW_PIN));
+    sw = TO_BIN(analogRead(SW_PIN));; //switch 추가 예정
+    //sw =0;
+    Serial.print("SW="); Serial.println(sw);
   //-----------------------------sensor data 값 설정------------------------------------
     if(sw == 0){  //switch OFF
+      Serial.println("Switch is OFf!");
         x_angle = 0;          //imu_compAngleX
         y_angle = 0;          //imu_compAngleY
         flex_pinion_up = 0;   //flex sensor
@@ -381,6 +376,7 @@ void loop() {
     }
     else{       //switch ON
     //급격한 움직임 방지
+      Serial.println("Switch On!");
         if(x_angle_df > IMU_MISTAKE || y_angle_df > IMU_MISTAKE || flex_pinion_up_df > FLEX_MISTAKE || flex_pinion_down_df > FLEX_MISTAKE || flex_gripper_df> FLEX_MISTAKE){}
         else{
           x_angle = compAngleX;
@@ -404,34 +400,78 @@ void loop() {
         }
         x_angle_df = x_angle_bf-x_angle;
         y_angle_df = y_angle_bf-y_angle;
-        
+        flex_pinion_up_df = flex_pinion_up_bf-flex_pinion_up;
+        flex_pinion_down_df = flex_pinion_down_bf-flex_pinion_down;
+        flex_gripper_df = flex_gripper_bf-flex_gripper;
 
         x_angle_bf = x_angle;          //imu_compAngleX buffer
         y_angle_bf = y_angle;          //imu_compAngleY buffer
+        flex_pinion_up_bf = flex_pinion_up;   //flex sensor buffer
+        flex_pinion_down_bf = flex_pinion_down; //flex sensor buffer
+        flex_gripper_bf = flex_gripper;     //flex sensor + pressure sensor buffer
+        Serial.print("flex_pinion_up:"); Serial.println(flex_pinion_up);
+        //max 34 min 9
+        Serial.print("flex_pinion_down:"); Serial.println(flex_pinion_down);
+        //max 37 min 11
         
-       
         
     }
 //----------------------------------------------------------------------------
   /*------------------모터 동작-------------------------*/
     //----------------yawing-------------------------------------------------
     //x_angle(-90to90) --> 모터 앵글(초기각 - motion angle ~ 초기각 + motion angle)
-    yaw_p = map(x_angle, -180, 180, yaw_tilt_IA_p - yaw_tilt_MA_p, yaw_tilt_IA_p + yaw_tilt_MA_p); 
+    yaw1_p = map(x_angle, -180, 180, yaw_tilt_IA_p - yaw_tilt_MA_p, yaw_tilt_IA_p + yaw_tilt_MA_p);
+    yaw2_p = map(-x_angle, -180, 180, yaw_tilt_IA_p - yaw_tilt_MA_p, yaw_tilt_IA_p + yaw_tilt_MA_p);
     //Serial.println(yaw_p);
-    yaw1_p_mv = MOVING_AVERAGE(yaw_p, 1); 
-    yaw2_p_mv = MOVING_AVERAGE(yaw_p, 1); 
+    yaw1_p_mv = MOVING_AVERAGE(yaw1_p, 1); 
+    yaw2_p_mv = MOVING_AVERAGE(yaw2_p, 1); 
     ser_yaw1.write(yaw1_p_mv);
     ser_yaw2.write(yaw2_p_mv);
-    Serial.print("yaw1_p_mv \t"); Serial.print(yaw1_p_mv); Serial.print("\tyaw2_p_mv \t"); Serial.print(yaw2_p_mv); Serial.print("\t\t");
+   // Serial.print("yaw_p_mv \t"); Serial.println(yaw_p_mv);
     //----------------tilting-------------------------------------------------
     //y_angle(-90to90) --> 모터 앵글(초기각 - motion angle ~ 초기각 + motion angle)
     tilt_p = map(y_angle, -180, 180, yaw_tilt_IA_p - yaw_tilt_MA_p, yaw_tilt_IA_p + yaw_tilt_MA_p); 
   
     tilt_p_mv = MOVING_AVERAGE(tilt_p, 2);
     ser_tilt.write(tilt_p_mv);
+    Serial.print("y angle \t"); Serial.println(y_angle);
+    Serial.print("tilt_p \t"); Serial.println(tilt_p);
     Serial.print("tilt_p_mv \t"); Serial.println(tilt_p_mv);
 
-   
+    //----------------pinion -------------------------------------------------
+    flex_down_bd = (flex_down_max - flex_down_min) / 2 + flex_down_min;
+    //Serial.println(flex_down_bd);
+    flex_up_bd = (flex_up_max - flex_up_min) / 2 + flex_up_min;
+    
+    if(pinion_p > pinion_FA_p){//Saturation
+      if (flex_pinion_up <= flex_up_max){ // 30>=pinion_up
+          pinion_p -= 5;
+          //ser_pinion.write(pinion_p);
+        }
+    }
+    else if(pinion_p < pinion_IA_p){//Saturation
+      if (flex_pinion_down <= flex_down_max){ // 30>=pinion_down
+          pinion_p += 5;
+          //ser_pinion.write(pinion_p);
+        }
+    }
+    else{
+      //Serial.println("YEAH!");
+      //----- down -----
+       if (flex_pinion_up <= flex_up_max){ // 34>=pinion_up
+          pinion_p -= 5;
+          //ser_pinion.write(pinion_p);
+        }
+      if (flex_pinion_down <= flex_down_max){ // 37>=pinion_down
+          pinion_p += 5;
+          //ser_pinion.write(pinion_p);
+        }
+      }
+      
+    ser_pinion.write(pinion_p);
+    Serial.print("pinion_p \t"); Serial.println(pinion_p);
+   // Serial.println(pinion_p);
+    
   
     //---------------- gripper -------------------------------------------------
     float flex_gripper_mv = MOVING_AVERAGE(flex_gripper, 3);
@@ -439,33 +479,24 @@ void loop() {
    // Serial.print("Flex Gripper="); Serial.println(flex_gripper);
     //Serial.print("Felx Gripper_MV="); Serial.println(flex_gripper_mv);
 
-    
+    grip_press1 = analogRead(PRESS1_PIN);; //압력센서 1
+    grip_press2 = analogRead(PRESS2_PIN);; //압력센서 2
     //Feedback 넣어서 수정 필요.
-    
-    if(!PRESS_feedback (gripper_press)){  
+    /*
+    if(!PRESS_feedback (grip_press1) || !PRESS_feedback (grip_press2)){  
       gripper_p = map(flex_gripper_mv, flex_grip_max, flex_grip_min, grip_IA_p, grip_FA_p);
-      Serial.print("Gripper_press : ");Serial.println(gripper_press);
+
     }
-    else {//다른 반응 설정 동작 X
+    else {}//다른 반응 설정
+    */
     ser_grip.write(gripper_p);
-    }
-    
-    //ser_grip.write(gripper_p);
-    
-    if(Index==SAMPLING_NUM - 1) {
+    if(Index == SAMPLING_NUM - 1) {
       Index=0;
       cnt++;
     }
-    else  Index++;
+    else    Index++;
+
+
     
-    /* --------------------------------VIBRATION-----------------------------------*/
-    if(gripper_press>PRESS_MAX){
-      vibration = map(gripper_press, 30,150,0,255);
-      analogWrite(VIBRATION_PIN, vibration);
-    }
   delay(10);
 }
-
-
-
-
